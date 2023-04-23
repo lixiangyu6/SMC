@@ -258,7 +258,7 @@ if __name__ == '__main__':
     parser.add_argument('--batch_size', default=128, type=int, help='批次中的数量')
     parser.add_argument('--num_workers', default=0, type=int, help='提前加载量')
     parser.add_argument('--epochs', default=600, type=int, help='训练轮次')
-    parser.add_argument('--warm_epochs', default=0, type=int, help='从何时开始加入聚类方法')
+    parser.add_argument('--warm_epochs', default=10, type=int, help='从何时开始加入聚类方法')
     parser.add_argument('--lr', type=float, default=1e-1,help='学习率')
     parser.add_argument('--weight_decay', type=float, default=1e-6,help='权重衰减')
     parser.add_argument('--logs_path', type=str, default='./SMC_logs', help='logs地址')
