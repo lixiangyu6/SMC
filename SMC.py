@@ -71,7 +71,7 @@ def compute_features(eval_loader, model, dim_net, args):
     features = torch.zeros(len(eval_loader.dataset), args.feature_dim).cuda()
     i=0
     batch=tqdm(eval_loader)
-    for out,_,_ in batch:
+    for [out,_],_,_ in batch:
         with torch.no_grad():
             out = out.cuda(non_blocking=True)
             out = model(out)
