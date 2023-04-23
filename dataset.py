@@ -3,12 +3,14 @@ import torchvision.datasets as datasets
 from PIL import Image
 
 class MyImageFolder(ImageFolder):
+    def __init__(self,data_path,transform):
+        super(MyImageFolder, self).__init__(root=data_path,transform=transform)
     def __getitem__(self, index):
         path, target = self.samples[index]
         sample = self.loader(path)
         if self.transform is not None:
             sample = self.transform(sample)
-        return sample, index,target
+        return sample,index,target
 
 class MyCIFAR10(datasets.CIFAR10):
     def __init__(self,data_path,transform,train):

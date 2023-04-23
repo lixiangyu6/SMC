@@ -135,7 +135,7 @@ if __name__ == '__main__':
     parser.add_argument('--temperature', default=0.5, type=float, help='损失函数中的temperature')
     parser.add_argument('--batch_size', default=128, type=int, help='批次中的数量')
     parser.add_argument('--num_workers', default=0, type=int, help='提前加载量')
-    parser.add_argument('--epochs', default=100, type=int, help='训练轮次')
+    parser.add_argument('--epochs', default=600, type=int, help='训练轮次')
     parser.add_argument('--lr', type=float, default=1e-1,help='学习率')
     parser.add_argument('--weight_decay', type=float, default=1e-6,help='权重衰减')
     parser.add_argument('--image_size', type=int, default=64, help='图片大小')

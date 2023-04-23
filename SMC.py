@@ -69,20 +69,16 @@ def compute_features(eval_loader, model, dim_net, args):
     dim_net.eval()
 
     features = torch.zeros(len(eval_loader.dataset), args.feature_dim).cuda()
-    i=0
     batch=tqdm(eval_loader)
-    for [out,_],_,_ in batch:
+    for i, (images, index, _) in enumerate(batch):
         with torch.no_grad():
-            out = out.cuda(non_blocking=True)
-            out = model(out)
+            images = images.cuda()
+            out = model(images)
             out=dim_net(out)
-            for out_single in out:
-                features[i]=out_single
-                i+=1
+            features[index] = out
 
         batch.set_description('计算表征向量')
 
-    model.train()
     return features.cpu()
 
 def run_clustering(x, args):
@@ -198,10 +194,6 @@ def train():
         loss.backward()
         train_optimizer.step()
 
-        # 动量法更新参数
-        for parameter_q, parameter_k in zip(train_model.parameters(), associated_model.parameters()):
-            parameter_k.data.copy_(parameter_k.data * args.momentum + parameter_q.data * (1.0 - args.momentum))
-
         losses.append(loss.item())
         avg_loss = sum(losses) / len(losses)
         train_bar.set_description('当前训练轮数为{0},当前平均损失为:{1:.5f}'.format(epoch+1,avg_loss))
@@ -266,7 +258,7 @@ if __name__ == '__main__':
     parser.add_argument('--batch_size', default=128, type=int, help='批次中的数量')
     parser.add_argument('--num_workers', default=0, type=int, help='提前加载量')
     parser.add_argument('--epochs', default=600, type=int, help='训练轮次')
-    parser.add_argument('--warm_epochs', default=10, type=int, help='从何时开始加入聚类方法')
+    parser.add_argument('--warm_epochs', default=0, type=int, help='从何时开始加入聚类方法')
     parser.add_argument('--lr', type=float, default=1e-1,help='学习率')
     parser.add_argument('--weight_decay', type=float, default=1e-6,help='权重衰减')
     parser.add_argument('--logs_path', type=str, default='./SMC_logs', help='logs地址')
@@ -276,11 +268,11 @@ if __name__ == '__main__':
 
     if args.train_data_path == './dataSetActuallyUsed/train':
         train_dataset = MyImageFolder(args.train_data_path,transform=TwoCropsTransform(train_transform))
-        cluster_dataset = MyImageFolder(args.train_data_path, transform=test_transform)
+        cluster_dataset = MyImageFolder(args.train_data_path, transform=train_transform)
         test_dataset=MyImageFolder(args.test_data_path,transform=test_transform)
     else:
         train_dataset = MyCIFAR10_PCL(data_path=args.train_data_path, transform=TwoCropsTransform(train_transform),train=True)
-        cluster_dataset = MyCIFAR10_PCL(args.train_data_path, transform=test_transform, train=True)
+        cluster_dataset = MyCIFAR10_PCL(data_path=args.train_data_path, transform=train_transform,train=True)
         test_dataset = MyCIFAR10_PCL(data_path=args.test_data_path, transform=test_transform, train=False)
 
     # print(train_dataset.class_to_idx)
@@ -296,7 +288,8 @@ if __name__ == '__main__':
     else:
         writer = SummaryWriter(os.path.join(args.logs_path, 'cifar10'))
 
-    train_dataloader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=False,num_workers=args.num_workers)
+    train_dataloader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True,num_workers=args.num_workers)
+    cluster_dataloader = DataLoader(cluster_dataset, batch_size=args.batch_size, shuffle=False,num_workers=args.num_workers)
     test_dataloader = DataLoader(test_dataset, batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers)
 
     train_model=SMC_ViT(image_size=args.image_size, patch_size=args.patch_size).cuda()
@@ -304,7 +297,7 @@ if __name__ == '__main__':
     test_model=RMC_Classifier(train_model.encoder, num_classes=args.class_num).cuda()#测试网络
     dim_reduction_net=Dim_reduction_net(image_size=args.image_size,vectordim=args.feature_dim).cuda()#降维网络
 
-    for param_q, param_k in zip(train_model.parameters(), associated_model.parameters()):#复制参数
+    for param_q, param_k in zip(train_model.parameters(), associated_model.parameters()):#初始化时先复制参数
         param_k.data.copy_(param_q.data)
         param_k.requires_grad=False
 
@@ -320,7 +313,7 @@ if __name__ == '__main__':
         cluster_result = None
         if epoch >= args.warm_epochs:
             # compute momentum features for center-cropped images
-            features = compute_features(train_dataloader, associated_model, dim_reduction_net,args)
+            features = compute_features(cluster_dataloader, associated_model, dim_reduction_net,args)
             features[torch.norm(features, dim=1) > 1.5] /= 2  # account for the few samples that are computed twice
             features = features.numpy()
             cluster_result = run_clustering(features, args)
@@ -328,6 +321,10 @@ if __name__ == '__main__':
         adjust_learning_rate(train_optimizer, args.lr, epoch, args)
 
         train()
+
+        # 动量法更新参数
+        for parameter_q, parameter_k in zip(train_model.parameters(), associated_model.parameters()):
+            parameter_k.data.copy_(parameter_k.data * args.momentum + parameter_q.data * (1.0 - args.momentum))
 
         test_model.cls_token = train_model.encoder.cls_token
         test_model.pos_embedding = train_model.encoder.pos_embedding
